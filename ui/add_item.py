@@ -1,11 +1,12 @@
 import tkinter as tk
+from tkinter import messagebox
 from database import connect
 
-def show_add_item(content):
+def show_add_item(content, username, role):
     for w in content.winfo_children():
         w.destroy()
 
-    fields = ["Item", "Ref", "Expiry (YYYY-MM-DD)", "Category", "Dept", "Supplier"]
+    fields = ["Item Name", "Reference No", "Expiry (YYYY-MM-DD)", "Category", "Department", "Supplier"]
     entries = {}
 
     for f in fields:
@@ -15,20 +16,29 @@ def show_add_item(content):
         entries[f] = e
 
     def save():
+        # Validate data
+        data = {f: entries[f].get() for f in fields}
+        if not all(data.values()):
+            messagebox.showerror("Error", "All fields are required")
+            return
+
         conn = connect()
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO assets VALUES (NULL,?,?,?,?,?,?)",
+            "INSERT INTO assets (item_name, reference_no, expiry_date, category, department, supplier) VALUES (?,?,?,?,?,?)",
             (
-                entries["Item"].get(),
-                entries["Ref"].get(),
-                entries["Expiry (YYYY-MM-DD)"].get(),
-                entries["Category"].get(),
-                entries["Dept"].get(),
-                entries["Supplier"].get()
+                data["Item Name"],
+                data["Reference No"],
+                data["Expiry (YYYY-MM-DD)"],
+                data["Category"],
+                data["Department"],
+                data["Supplier"]
             )
         )
         conn.commit()
         conn.close()
+        messagebox.showinfo("Success", "Item added successfully")
+        # Clear fields
+        for e in entries.values(): e.delete(0, tk.END)
 
-    tk.Button(content, text="Save Item", command=save).pack(pady=20)
+    tk.Button(content, text="Save Item", bg="#1abc9c", fg="white", command=save).pack(pady=20)

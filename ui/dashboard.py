@@ -9,12 +9,10 @@ def show_dashboard(username, role):
     win.title("LS Cable Inventory Management System")
     win.geometry("1200x700")
 
-    # ================= SIDEBAR =================
     sidebar = tk.Frame(win, bg="#2c3e50", width=220)
     sidebar.pack(side="left", fill="y")
     sidebar.pack_propagate(False)
 
-    # ================= CONTENT =================
     content = tk.Frame(win, bg="#ecf0f1")
     content.pack(side="right", fill="both", expand=True)
 
@@ -26,29 +24,17 @@ def show_dashboard(username, role):
         tk.Button(
             sidebar,
             text=text,
-            fg="white",
-            bg="#34495e",
-            activebackground="#1abc9c",
-            font=("Segoe UI", 11, "bold"),
-            anchor="w",
-            padx=15,
-            pady=10,
-            relief="flat",
+            fg="white", bg="#34495e", activebackground="#1abc9c",
+            font=("Segoe UI", 11, "bold"), anchor="w", padx=15, pady=10, relief="flat",
             command=lambda: (clear(), command(content, username, role))
         ).pack(fill="x", padx=10, pady=4)
 
-    tk.Label(
-        sidebar,
-        text="LS Cable",
-        fg="white",
-        bg="#2c3e50",
-        font=("Segoe UI", 16, "bold")
-    ).pack(pady=20)
+    tk.Label(sidebar, text="LS Cable", fg="white", bg="#2c3e50", font=("Segoe UI", 16, "bold")).pack(pady=20)
 
     menu("Inventory", show_inventory)
     menu("Add Item", show_add_item)
-    menu("Expired Items", lambda c,u,r: show_inventory(c,u,r,"expired"))
-    menu("Expiring (30 Days)", lambda c,u,r: show_inventory(c,u,r,"expiring"))
+    menu("Expired Items", lambda c, u, r: show_inventory(c, u, r, "expired"))
+    menu("Expiring (30 Days)", lambda c, u, r: show_inventory(c, u, r, "expiring"))
 
     if role == "admin":
         menu("Users", show_users)
@@ -56,20 +42,10 @@ def show_dashboard(username, role):
 
     def logout():
         win.destroy()
-        from ui.login import show_login
-        show_login(lambda u,r: show_dashboard(u,r))
+        from main import open_login # Centralized login entry point
+        open_login()
 
-    tk.Button(
-        sidebar,
-        text="Logout",
-        fg="white",
-        bg="#e74c3c",
-        relief="flat",
-        pady=10,
-        command=logout
-    ).pack(fill="x", padx=10, pady=20)
+    tk.Button(sidebar, text="Logout", fg="white", bg="#e74c3c", relief="flat", pady=10, command=logout).pack(fill="x", padx=10, pady=20)
 
-    # Load default page
     show_inventory(content, username, role)
-
     win.mainloop()

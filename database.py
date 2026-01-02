@@ -9,6 +9,7 @@ def init_db():
     conn = connect()
     cur = conn.cursor()
 
+    # Users Table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,18 +19,20 @@ def init_db():
     )
     """)
 
+    # Assets Table - Updated to match UI queries
     cur.execute("""
     CREATE TABLE IF NOT EXISTS assets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        ref TEXT,
-        expiry DATE,
+        item_name TEXT,
+        reference_no TEXT,
+        expiry_date DATE,
         category TEXT,
         department TEXT,
         supplier TEXT
     )
     """)
 
+    # Logs Table - Updated column names for consistency
     cur.execute("""
     CREATE TABLE IF NOT EXISTS logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +46,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# ✅ THIS FUNCTION WAS MISSING
 def has_admin():
     conn = connect()
     cur = conn.cursor()
