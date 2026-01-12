@@ -1,33 +1,54 @@
-import tkinter as tk
-from tkinter import messagebox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox
+from PyQt6.QtCore import pyqtSignal, Qt
 from auth import create_user
 
-def show_setup_admin(on_done):
-    win = tk.Tk()
-    win.title("Initial Setup – Create Admin")
-    win.geometry("400x300")
+class SetupWindow(QWidget):
+    # Signal to tell main.py that the admin is created
+    setup_finished = pyqtSignal()
 
-    tk.Label(win, text="Create Admin Account", font=("Arial", 14, "bold")).pack(pady=10)
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Initial Setup – Create Admin")
+        self.setFixedSize(400, 350)
+        self.setStyleSheet("background-color: white;")
 
-    tk.Label(win, text="Username").pack()
-    user = tk.Entry(win)
-    user.pack()
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-    tk.Label(win, text="Password").pack()
-    pwd = tk.Entry(win, show="*")
-    pwd.pack()
+        title = QLabel("Create Admin Account")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 20px;")
+        layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignCenter)
 
-    def create():
-        if not user.get() or not pwd.get():
-            messagebox.showerror("Error", "All fields required")
+        self.user_input = QLineEdit()
+        self.user_input.setPlaceholderText("Username")
+        self.user_input.setFixedWidth(280)
+        self.user_input.setStyleSheet("padding: 10px; border: 1px solid #ddd; border-radius: 5px;")
+        layout.addWidget(self.user_input, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.pass_input = QLineEdit()
+        self.pass_input.setPlaceholderText("Password")
+        self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pass_input.setFixedWidth(280)
+        self.pass_input.setStyleSheet("padding: 10px; border: 1px solid #ddd; border-radius: 5px;")
+        layout.addWidget(self.pass_input, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.create_btn = QPushButton("Create Admin")
+        self.create_btn.setFixedWidth(280)
+        self.create_btn.setStyleSheet("background-color: #27ae60; color: white; padding: 12px; border-radius: 5px; font-weight: bold;")
+        self.create_btn.clicked.connect(self.handle_setup)
+        layout.addWidget(self.create_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    def handle_setup(self):
+        u = self.user_input.text().strip()
+        p = self.pass_input.text().strip()
+
+        if not u or not p:
+            QMessageBox.warning(self, "Error", "All fields are required")
             return
 
-        create_user(user.get(), pwd.get(), "admin")
-        messagebox.showinfo("Success", "Admin created successfully")
-
-        win.destroy()
-        on_done()
-
-    tk.Button(win, text="Create Admin", command=create).pack(pady=20)
-
-    win.mainloop()
+        # Save to database using your existing auth logic
+        create_user(u, p, "admin")
+        QMessageBox.information(self, "Success", "Admin created successfully!")
+        
+        # Emit signal to main.py to switch to Login
+        self.setup_finished.emit()

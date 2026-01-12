@@ -1,89 +1,235 @@
-import tkinter as tk
-from ui.inventory import show_inventory
-from ui.add_item import show_add_item
-from ui.users import show_users
-from ui.activity_logs import show_logs
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                             QPushButton, QLabel, QStackedWidget, QFrame)
+from PyQt6.QtCore import Qt
+from ui.inventory import InventoryPage
+from ui.add_item import AddItemPage
+from ui.users import UsersPage
+from ui.activity_logs import LogsPage
+from ui.reports import ReportsPage
+from ui.staff import StaffPage
+from ui.allocation import AllocationPage
+import database
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+from logs import log_action
 
-def show_dashboard(username, role):
-    win = tk.Tk()
-    win.title("LS Cable Inventory Management System")
-    win.geometry("1200x700")
+class DashboardWindow(QMainWindow):
+    def __init__(self, username, role):
+        super().__init__()
+        self.username = username
+        self.role = role
+        self.setWindowTitle("LS Cable Subscription & Asset Management")
+        self.setMinimumSize(1200, 800)
 
-    # ================= SIDEBAR =================
-    # Using the original dark color (#2c3e50)
-    sidebar = tk.Frame(win, bg="#2c3e50", width=220)
-    sidebar.pack(side="left", fill="y")
-    sidebar.pack_propagate(False)
+        # Main Layout
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
+        self.main_layout = QHBoxLayout(main_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
 
-    # ================= CONTENT =================
-    content = tk.Frame(win, bg="#ecf0f1")
-    content.pack(side="right", fill="both", expand=True)
+        # ================= SIDEBAR =================
+        self.sidebar = QFrame()
+        self.sidebar.setFixedWidth(240)
+        self.sidebar.setStyleSheet("background-color: #2c3e50; border: none;")
+        self.sidebar_layout = QVBoxLayout(self.sidebar)
+        self.sidebar_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-    def clear():
-        for w in content.winfo_children():
-            w.destroy()
+        logo = QLabel("LS Cable")
+        logo.setStyleSheet("color: white; font-size: 22px; font-weight: bold; margin: 25px 0;")
+        self.sidebar_layout.addWidget(logo, alignment=Qt.AlignmentFlag.AlignCenter)
 
-    # This replaces the Button with a Label for a transparent look
-    def menu(text, command):
-        lbl = tk.Label(
-            sidebar,
-            text=text,
-            fg="white",           # White text
-            bg="#2c3e50",         # Matches sidebar exactly (Transparent look)
-            font=("Segoe UI", 11, "bold"),
-            anchor="w",
-            padx=15,
-            pady=10,
-            cursor="hand2"        # Changes cursor to hand on hover
-        )
+        # ================= CONTENT STACK =================
+        self.stack = QStackedWidget()
+        self.stack.setStyleSheet("background-color: #f8f9fa;")
+
+        # Initialize Pages
+        self.home_page = self.create_home_page()
+        self.inventory_page = InventoryPage()
+        self.add_item_page = AddItemPage(username)
+        self.expiring_page = InventoryPage(mode="expiring")
+        self.expired_page = InventoryPage(mode="expired")
+        self.users_page = UsersPage(username)
+        self.logs_page = LogsPage()
+        self.reports_page = ReportsPage(username, role)
+        self.staff_page = StaffPage(username)
+        self.alloc_page = AllocationPage(username)
+
+        # Add all to stack
+        self.stack.addWidget(self.home_page)      # 0
+        self.stack.addWidget(self.inventory_page) # 1
+        self.stack.addWidget(self.add_item_page)  # 2
+        self.stack.addWidget(self.expiring_page)  # 3
+        self.stack.addWidget(self.expired_page)   # 4
+        self.stack.addWidget(self.users_page)     # 5
+        self.stack.addWidget(self.logs_page)      # 6
+        self.stack.addWidget(self.reports_page)   # 7
+        self.stack.addWidget(self.staff_page)     # 8
+        self.stack.addWidget(self.alloc_page)     # 9
+
+        # ================= NAVIGATION BUTTONS =================
+        self.sidebar_layout.addWidget(self.create_nav_btn("Dashboard", lambda: self.stack.setCurrentWidget(self.home_page)))
         
-        # Binds the click action
-        lbl.bind("<Button-1>", lambda e: (clear(), command(content, username, role)))
+        # Subscription Section
+        self.sidebar_layout.addWidget(self.create_nav_btn("All Subscriptions", lambda: self.stack.setCurrentWidget(self.inventory_page)))
+        self.sidebar_layout.addWidget(self.create_nav_btn("Add Subscription", lambda: self.stack.setCurrentWidget(self.add_item_page)))
         
-        # Adds hover effects
-        lbl.bind("<Enter>", lambda e: lbl.config(bg="#34495e")) # Lighten on hover
-        lbl.bind("<Leave>", lambda e: lbl.config(bg="#2c3e50")) # Return to normal
+        # Staff & Asset Section
+        line1 = QFrame()
+        line1.setFrameShape(QFrame.Shape.HLine)
+        line1.setStyleSheet("background-color: #34495e; margin: 10px 20px;")
+        self.sidebar_layout.addWidget(line1)
+
+        self.sidebar_layout.addWidget(self.create_nav_btn("Staff Directory", lambda: self.stack.setCurrentWidget(self.staff_page)))
+        self.sidebar_layout.addWidget(self.create_nav_btn("Hardware & Assets", lambda: self.stack.setCurrentWidget(self.alloc_page)))
+
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.Shape.HLine)
+        line2.setStyleSheet("background-color: #34495e; margin: 10px 20px;")
+        self.sidebar_layout.addWidget(line2)
+
+        # Expiry Monitoring
+        self.sidebar_layout.addWidget(self.create_nav_btn("Expiring (30 Days)", lambda: self.stack.setCurrentWidget(self.expiring_page)))
+        self.sidebar_layout.addWidget(self.create_nav_btn("Expired Subs", lambda: self.stack.setCurrentWidget(self.expired_page)))
         
-        lbl.pack(fill="x", padx=10, pady=2)
+        # Admin Features
+        if self.role == "admin":
+            line3 = QFrame()
+            line3.setFrameShape(QFrame.Shape.HLine)
+            line3.setStyleSheet("background-color: #34495e; margin: 10px 20px;")
+            self.sidebar_layout.addWidget(line3)
+            
+            self.sidebar_layout.addWidget(self.create_nav_btn("User Management", lambda: self.stack.setCurrentWidget(self.users_page)))
+            self.sidebar_layout.addWidget(self.create_nav_btn("Audit Logs", lambda: self.stack.setCurrentWidget(self.logs_page)))
 
-    # Sidebar Header
-    tk.Label(
-        sidebar,
-        text="LS Cable",
-        fg="white",
-        bg="#2c3e50",
-        font=("Segoe UI", 16, "bold")
-    ).pack(pady=20)
+        # Support Section
+        self.sidebar_layout.addWidget(self.create_nav_btn("Support / Reports", lambda: self.stack.setCurrentWidget(self.reports_page)))
 
-    # Menu Items
-    menu("Inventory", show_inventory)
-    menu("Add Item", show_add_item)
-    menu("Expired Items", lambda c, u, r: show_inventory(c, u, r, "expired"))
-    menu("Expiring (30 Days)", lambda c, u, r: show_inventory(c, u, r, "expiring"))
+        self.sidebar_layout.addStretch()
 
-    if role == "admin":
-        menu("Users", show_users)
-        menu("Activity Logs", show_logs)
+        # Logout
+        self.btn_logout = QPushButton("Logout")
+        self.btn_logout.setStyleSheet("background-color: #e74c3c; color: white; padding: 15px; border: none; font-weight: bold;")
+        self.btn_logout.clicked.connect(self.handle_logout)
+        self.sidebar_layout.addWidget(self.btn_logout)
 
-    def logout():
-        win.destroy()
-        from ui.login import show_login
-        show_login(lambda u, r: show_dashboard(u, r))
+        self.main_layout.addWidget(self.sidebar)
+        self.main_layout.addWidget(self.stack)
 
-    # Logout button kept as a standard button for high visibility
-    tk.Button(
-        sidebar,
-        text="Logout",
-        fg="white",
-        bg="#e74c3c",
-        activebackground="#c0392b",
-        activeforeground="white",
-        relief="flat",
-        pady=8,
-        command=logout
-    ).pack(fill="x", padx=20, pady=20)
+        self.stack.setCurrentWidget(self.home_page)
 
-    # Load default page
-    show_inventory(content, username, role)
+    # --- HELPER METHODS ---
 
-    win.mainloop()
+    def create_nav_btn(self, text, callback):
+        btn = QPushButton(text)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent; color: white; text-align: left;
+                padding: 15px 25px; border: none; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #34495e; }
+        """)
+        btn.clicked.connect(callback)
+        return btn
+
+    def create_home_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Fetch Data
+        stats = database.get_dashboard_stats()
+        
+        # 1. Welcome Message
+        welcome = QLabel(f"Dashboard Overview - {self.username}")
+        welcome.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
+        layout.addWidget(welcome)
+
+        # 2. Metric Cards (Row of 4)
+        card_layout = QHBoxLayout()
+        card_layout.setSpacing(20)
+        
+        # Subscription Cards
+        card_layout.addWidget(self.create_card("Total Subscriptions", str(stats['sub_total']), "#2980b9")) # Blue
+        card_layout.addWidget(self.create_card("Expired Subs", str(stats['sub_expired']), "#e74c3c"))     # Red
+        
+        # Hardware Cards
+        card_layout.addWidget(self.create_card("Total Hardware", str(stats['hw_total']), "#8e44ad"))      # Purple
+        card_layout.addWidget(self.create_card("Assigned Items", str(stats['hw_assigned']), "#27ae60"))   # Green
+        
+        layout.addLayout(card_layout)
+
+        # 3. Charts Area (Side by Side)
+        charts_layout = QHBoxLayout()
+        charts_layout.setSpacing(20)
+
+        # --- LEFT: Bar Chart (Subscriptions per Dept) ---
+        chart_frame1 = QFrame()
+        chart_frame1.setStyleSheet("background-color: white; border-radius: 10px; border: 1px solid #ddd;")
+        vbox1 = QVBoxLayout(chart_frame1)
+        
+        dept_data = database.get_department_counts()
+        fig1 = Figure(figsize=(4, 3), dpi=100)
+        ax1 = fig1.add_subplot(111)
+        if dept_data:
+            ax1.bar(dept_data.keys(), dept_data.values(), color='#3498db')
+            ax1.set_xticklabels(dept_data.keys(), rotation=15, ha="right")
+        else:
+            ax1.text(0.5, 0.5, 'No Subscriptions', ha='center')
+        ax1.set_title("Subscriptions by Dept", fontsize=10)
+        
+        canvas1 = FigureCanvas(fig1)
+        vbox1.addWidget(canvas1)
+        charts_layout.addWidget(chart_frame1)
+
+        # --- RIGHT: Pie Chart (Hardware Availability) ---
+        chart_frame2 = QFrame()
+        chart_frame2.setStyleSheet("background-color: white; border-radius: 10px; border: 1px solid #ddd;")
+        vbox2 = QVBoxLayout(chart_frame2)
+        
+        hw_data = database.get_hardware_status_counts() # {'Available': 5, 'Assigned': 2}
+        fig2 = Figure(figsize=(4, 3), dpi=100)
+        ax2 = fig2.add_subplot(111)
+        
+        if hw_data:
+            labels = hw_data.keys()
+            values = hw_data.values()
+            # Dynamic colors based on labels
+            colors = []
+            if 'Available' in labels: colors.append('#2ecc71')
+            if 'Assigned' in labels: colors.append('#e74c3c')
+            
+            # Fallback if specific colors miss
+            if len(colors) < len(labels): colors = ['#2ecc71', '#e74c3c']
+
+            ax2.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors)
+        else:
+            ax2.text(0.5, 0.5, 'No Hardware Data', ha='center')
+        ax2.set_title("Hardware Status", fontsize=10)
+        
+        canvas2 = FigureCanvas(fig2)
+        vbox2.addWidget(canvas2)
+        charts_layout.addWidget(chart_frame2)
+
+        layout.addLayout(charts_layout)
+        
+        return page
+
+    def create_card(self, title, value, color):
+        card = QFrame()
+        card.setFixedSize(280, 130)
+        card.setStyleSheet(f"background-color: white; border-radius: 10px; border-left: 6px solid {color};")
+        vbox = QVBoxLayout(card)
+        val_label = QLabel(value)
+        val_label.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color}; border: none;")
+        title_label = QLabel(title)
+        title_label.setStyleSheet("color: #7f8c8d; font-size: 14px; border: none;")
+        vbox.addWidget(val_label)
+        vbox.addWidget(title_label)
+        return card
+
+    def handle_logout(self):
+        log_action(self.username, "Logout", "System Exit")
+        self.close()
+        from main import MainApp
+        self.app_instance = MainApp()
